@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma/client"
 }
 
 datasource db {
@@ -29,9 +28,13 @@ model Video {
   user         User        @relation(fields: [userId], references: [id])
   userId       String
   name         String      @db.VarChar(255)
-  videoURL     String      @db.Text
+  videoURL     String      @default("")
   thumbnailURL String      @default("")
   status       VideoStatus @default(PROCESSING)
+  fileSize     BigInt      @default(0)
+  duration     Int?        
+  mimeType     String?     @db.VarChar(100)
+  dimensions   Json? 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now())
 
