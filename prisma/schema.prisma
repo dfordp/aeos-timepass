@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String      @id
+  email            String      @unique
+  name             String     
+  videos           Video[]
+  whitelistedLinks ShareLink[] @relation("WhitelistedUsers")
+  createdLinks     ShareLink[] @relation("Creator")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now())
+}
+
+enum VideoStatus {
+  PROCESSING
+  READY
+}
+
+model Video {
+  id           String      @id @default(uuid())
+  user         User        @relation(fields: [userId], references: [id])
+  userId       String
+  name         String      @db.VarChar(255)
+  videoURL     String      @db.Text
+  thumbnailURL String      @default("")
+  status       VideoStatus @default(PROCESSING)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @default(now())
+
+  shareLinks ShareLink[]
+}
+
+enum LinkVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model ShareLink {
+  id            String         @id @default(uuid())
+  video         Video          @relation(fields: [videoId], references: [id])
+  videoId       String
+  creator       User           @relation("Creator", fields: [creatorId], references: [id])
+  creatorId     String
+  visibility    LinkVisibility
+  expiresAt     DateTime?      @db.Timestamp()
+  lastViewedAt  DateTime?
+  userWhitelist User[]         @relation("WhitelistedUsers")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now())
+
+  accesses LinkAccess[]
+}
+
+model LinkAccess {
+  id          String    @id @default(uuid())
+  shareLink   ShareLink @relation(fields: [shareLinkId], references: [id])
+  shareLinkId String
+  viewerEmail String?
+  viewedAt    DateTime  @default(now())
+
+  @@index([shareLinkId, viewedAt])
+}
