@@ -41,7 +41,9 @@ export async function uploadToR2({ file, key, contentType }: UploadParams) {
     });
 
     await r2Client.send(command);
-    return `https://${process.env.R2_PUBLIC_URL}/${key}`;
+    const baseUrl = process.env.R2_PUBLIC_URL;
+
+    return `${baseUrl}/${key}`;
   } catch (error) {
     console.error('Error uploading to R2:', error);
     throw new Error('Failed to upload file to R2');

@@ -67,6 +67,7 @@ export async function POST(req: Request,  { params }: { params: { id: string } }
             data : {
                 videoURL : videoURL.url,
                 thumbnailURL : thumbnailURL.url,
+                status : "READY"
             }
         })
 

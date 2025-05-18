@@ -32,7 +32,7 @@ interface CreateVideoResponse {
   success: boolean;
   data: {
     id: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
