@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@clerk/nextjs";
+import axios from "axios";
 import {
   Dialog,
   DialogContent,
@@ -14,96 +15,79 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { bytesToSize } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
-type UploadStage = 'METADATA' | 'UPLOAD' | 'PROCESSING';
-
-interface UploadProgress {
-  stage: UploadStage;
-  progress: number;
-}
-
+// Types
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadComplete?: (videoId: string) => void;
 }
 
-interface FileDetails {
-  name: string;
-  size: string;
-  type: string;
-  duration: string;
-  dimensions: {
-    width: number;
-    height: number;
-  } | null;
-  lastModified: string;
+interface VideoMetadata {
+  duration: number;
+  resolution: string;
 }
 
-export function UploadModal({ isOpen, onClose }: UploadModalProps) {
-  const {user} = useUser();
+interface CreateVideoResponse {
+  success: boolean;
+  data: {
+    id: string;
+    [key: string]: any;
+  };
+}
+
+export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalProps) {
+  // State
+  const { user } = useUser();
+  const userId = user?.id;
   const [file, setFile] = useState<File | null>(null);
-  const [fileDetails, setFileDetails] = useState<FileDetails | null>(null);
   const [name, setName] = useState("");
-  const [currentStage, setCurrentStage] = useState<UploadStage>("METADATA");
-  const [progress, setProgress] = useState<Record<UploadStage, number>>({
-    METADATA: 0,
-    UPLOAD: 0,
-    PROCESSING: 0
-  });
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const stages: { id: UploadStage; label: string; description: string }[] = [
-    { id: "METADATA", label: "Preparing", description: "Preparing upload..." },
-    { id: "UPLOAD", label: "Uploading", description: "Uploading video file..." },
-    { id: "PROCESSING", label: "Processing", description: "Processing video..." }
-  ];
-
-  const resetForm = () => {
-    setFile(null);
-    setFileDetails(null);
-    setName("");
-    setCurrentStage("METADATA");
-    setProgress({ METADATA: 0, UPLOAD: 0, PROCESSING: 0 });
-    setIsUploading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const getVideoMetadata = async (file: File): Promise<{ duration: string; dimensions: { width: number; height: number } }> => {
+  // Video metadata extraction
+  const getVideoMetadata = async (file: File): Promise<VideoMetadata> => {
     return new Promise((resolve) => {
       const video = document.createElement('video');
       video.preload = 'metadata';
       video.onloadedmetadata = () => {
         window.URL.revokeObjectURL(video.src);
-        const duration = video.duration;
-        const minutes = Math.floor(duration / 60);
-        const seconds = Math.floor(duration % 60);
         resolve({
-          duration: `${minutes}:${seconds.toString().padStart(2, '0')}`,
-          dimensions: {
-            width: video.videoWidth,
-            height: video.videoHeight
-          }
+          duration: Math.floor(video.duration),
+          resolution: `${video.videoWidth}x${video.videoHeight}`
         });
       };
       video.src = URL.createObjectURL(file);
     });
   };
 
+  // Form reset
+  const resetForm = () => {
+    setFile(null);
+    setName("");
+    setProgress(0);
+    setStatus("");
+    setIsUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // File selection handler
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (selectedFile.size > 500 * 1024 * 1024) {
+    // Validate file size (500MB limit)
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    if (selectedFile.size > MAX_FILE_SIZE) {
       toast.error("File size must be less than 500MB");
       return;
     }
 
+    // Validate file type
     if (!selectedFile.type.startsWith("video/")) {
       toast.error("Please upload a video file");
       return;
@@ -111,20 +95,12 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
 
     setFile(selectedFile);
     setName(selectedFile.name.replace(/\.[^/.]+$/, ""));
-
-    const { duration, dimensions } = await getVideoMetadata(selectedFile);
-    setFileDetails({
-      name: selectedFile.name,
-      size: bytesToSize(selectedFile.size),
-      type: selectedFile.type,
-      duration,
-      dimensions,
-      lastModified: new Date(selectedFile.lastModified).toLocaleString()
-    });
+    toast.success("File selected successfully");
   };
 
+  // Upload handler
   const handleUpload = async () => {
-    if (!file || !name.trim()) {
+    if (!file || !name.trim() || !userId) {
       toast.error("Please provide both a name and a file");
       return;
     }
@@ -132,58 +108,65 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
     try {
       setIsUploading(true);
 
-      // Stage 1: Metadata
-      setCurrentStage("METADATA");
-      setProgress(prev => ({ ...prev, METADATA: 50 }));
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name.trim());
-      formData.append("metadata", JSON.stringify(fileDetails));
-
-      setProgress(prev => ({ ...prev, METADATA: 100 }));
-
-      // Stage 2: Upload
-      setCurrentStage("UPLOAD");
-
-      const uploadPromise = new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.upload.addEventListener("progress", (event) => {
-          if (event.lengthComputable) {
-            const uploadProgress = Math.round((event.loaded * 100) / event.total);
-            setProgress(prev => ({ ...prev, UPLOAD: uploadProgress }));
-          }
-        });
-
-        xhr.onreadystatechange = () => {
-          if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-              resolve(JSON.parse(xhr.responseText));
-            } else {
-              reject(new Error("Upload failed"));
-            }
-          }
-        };
-
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("POST", "/api/videos/upload");
-        xhr.send(formData);
+      // Step 1: Create video entry (0-20%)
+      setStatus("Analyzing video...");
+      setProgress(10);
+      
+      const metadata = await getVideoMetadata(file);
+      
+      setStatus("Creating video entry...");
+      const { data: videoResponse } = await axios.post<CreateVideoResponse>('/api/video', {
+        userId,
+        name: name.trim(),
+        fileSize: file.size,
+        type: file.type,
+        duration: metadata.duration,
+        resolution: metadata.resolution
       });
 
-      await uploadPromise;
+      const videoId = videoResponse.data.id;
+      setProgress(20);
 
-      // Stage 3: Processing
-      setCurrentStage("PROCESSING");
-      setProgress(prev => ({ ...prev, PROCESSING: 100 }));
+      // Step 2: Upload video file (20-80%)
+      setStatus("Uploading video file...");
+      const formData = new FormData();
+      formData.append("file", file);
 
-      toast.success("Video uploaded successfully");
+      await axios.post(`/api/video/${videoId}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const progressPercent = Math.round(
+              (progressEvent.loaded / progressEvent.total) * 60
+            );
+            setProgress(20 + progressPercent);
+          }
+        },
+      });
+
+      setProgress(80);
+
+      // Step 3: Generate thumbnail (80-100%)
+      setStatus("Processing video...");
+      await axios.post(`/api/video/${videoId}/thumbnail`);
+
+      setProgress(100);
+      toast.success("Video uploaded successfully!");
+      onUploadComplete?.(videoId);
       resetForm();
       onClose();
 
     } catch (error) {
       console.error("Upload error:", error);
-      toast.error("Failed to upload video");
+      
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.error || 'Upload failed';
+        toast.error(errorMessage);
+      } else {
+        toast.error("Failed to upload video");
+      }
     } finally {
       setIsUploading(false);
     }
@@ -230,63 +213,16 @@ export function UploadModal({ isOpen, onClose }: UploadModalProps) {
             />
           </div>
 
-          {fileDetails && (
-            <div className="rounded-lg border p-4 space-y-2">
-              <h4 className="font-semibold">File Details</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Name:</span>
-                  <span>{fileDetails.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Size:</span>
-                  <span>{fileDetails.size}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type:</span>
-                  <span>{fileDetails.type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Duration:</span>
-                  <span>{fileDetails.duration}</span>
-                </div>
-                {fileDetails.dimensions && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Resolution:</span>
-                    <span>{fileDetails.dimensions.width}x{fileDetails.dimensions.height}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {isUploading && (
-            <div className="space-y-6">
-              {stages.map((stage) => (
-                <div key={stage.id} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className={cn(
-                      "text-muted-foreground",
-                      currentStage === stage.id && "text-primary font-medium"
-                    )}>
-                      {stage.label}
-                    </span>
-                    <span>{progress[stage.id]}%</span>
-                  </div>
-                  <Progress 
-                    value={progress[stage.id]} 
-                    className={cn(
-                      "h-2",
-                      currentStage === stage.id ? "opacity-100" : "opacity-50"
-                    )}
-                  />
-                  {currentStage === stage.id && (
-                    <p className="text-xs text-muted-foreground text-center">
-                      {stage.description}
-                    </p>
-                  )}
-                </div>
-              ))}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{status}</span>
+                <span>{progress}%</span>
+              </div>
+              <Progress 
+                value={progress} 
+                className="h-2"
+              />
             </div>
           )}
 

@@ -16,9 +16,13 @@ export async function POST(req: Request,  { params }: { params: { id: string } }
             return NextResponse.json({ status: "fail", error: "No file uploaded" });
         }
 
+        const uploadDir = path.join(process.cwd(), 'public', videoId);
+        await fs.mkdir(uploadDir, { recursive: true });
+
+
         const arrayBuffer = await file.arrayBuffer();
         const buffer = new Uint8Array(arrayBuffer);
-        const filePath = path.join(process.cwd(), `public/video/${videoId}`, file.name);
+        const filePath = path.join(uploadDir, file.name);
         await fs.writeFile(filePath, buffer);
 
         revalidatePath("/");
