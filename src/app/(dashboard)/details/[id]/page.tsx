@@ -188,6 +188,7 @@ export default function VideoDetails() {
           userEmails: [] 
         });
       }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast.error('Failed to create share link');
     }
