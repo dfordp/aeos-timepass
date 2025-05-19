@@ -4,10 +4,9 @@ import { Prisma } from "@prisma/client";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;  
+    const id = request.url.split('/').pop();
 
     if (!id) {
       return NextResponse.json({
@@ -70,10 +69,9 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const id = request.url.split('/').pop();
 
     if (!id) {
       return NextResponse.json({

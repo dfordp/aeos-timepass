@@ -1,48 +1,16 @@
 import prismaClient from "@/lib/prismadb";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { LinkVisibility, Prisma } from "@prisma/client";
 
-// Get share link details
+
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+    request: NextRequest,
 ) {
   try {
-    const { id } = params;
+  const id = request.url.split('/').pop();
 
     const shareLink = await prismaClient.shareLink.findUnique({
-      where: { id },
-      include: {
-        video: {
-          select: {
-            name: true,
-            thumbnailURL: true,
-          },
-        },
-        creator: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
-        userWhitelist: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        accesses: {
-          orderBy: {
-            viewedAt: 'desc'
-          },
-          select: {
-            id: true,
-            viewerEmail: true,
-            viewedAt: true,
-          },
-        },
-      },
+      where: { id : id }
     });
 
     if (!shareLink) {
@@ -69,10 +37,9 @@ export async function GET(
 // Update share link
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+  const id = request.url.split('/').pop();
     const body = await request.json();
     const { visibility, expiresAt, userWhitelist } = body;
 
@@ -96,15 +63,6 @@ export async function PATCH(
             set: userWhitelist.map((userId: string) => ({ id: userId }))
           }
         }),
-      },
-      include: {
-        userWhitelist: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
       },
     });
 
@@ -135,10 +93,9 @@ export async function PATCH(
 // Delete share link
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const id = request.url.split('/').pop();
 
     await prismaClient.shareLink.delete({
       where: { id }

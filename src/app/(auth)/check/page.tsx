@@ -67,7 +67,7 @@ export default function CheckUserPage() {
     <div className="container mx-auto max-w-md p-6">
       <h1 className="text-2xl font-bold mb-6">Welcome to AeosLabs</h1>
       <p className="text-muted-foreground">
-        We're verifying your account details...
+        We are verifying your account details
       </p>
     </div>
   );

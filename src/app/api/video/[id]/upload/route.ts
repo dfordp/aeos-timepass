@@ -1,17 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import fs from "node:fs/promises";
 import path from 'path';
 
 
-export async function POST(req: Request,  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
         const file = formData.get("file") as File;
  
-        const { id:videoId } = await params;
-
+        const videoId = req.url.split('/').pop();
+         if (!videoId) {
+            return NextResponse.json({ status: "fail", error: "Video ID not found" }, { status: 400 });
+        }
 
         if (!file) {
             return NextResponse.json({ status: "fail", error: "No file uploaded" });

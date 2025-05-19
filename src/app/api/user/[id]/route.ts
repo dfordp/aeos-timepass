@@ -4,10 +4,9 @@ import { Prisma } from "@prisma/client";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const id = request.url.split('/').pop();
 
     if (!id) {
       return new NextResponse('ID is required', { status: 400 });

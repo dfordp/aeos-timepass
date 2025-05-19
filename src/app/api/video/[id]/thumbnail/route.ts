@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
@@ -18,10 +18,12 @@ const SUPPORTED_FORMATS = [
 ];
 
 
-export async function POST(req: Request,  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest) {
     try {
-        const { id:videoId } = await params;
+        const videoId = req.url.split('/').pop();
+        if (!videoId) {
+            return NextResponse.json({ status: "fail", error: "Video ID not found" }, { status: 400 });
+        }
         const videoDir = path.join(process.cwd(), 'public', videoId);
         
         const files = await fs.readdir(videoDir);

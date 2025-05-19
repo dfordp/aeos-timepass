@@ -1,15 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Link2, Plus, Trash2, Mail, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowLeft} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
@@ -76,27 +75,28 @@ interface VideoData {
 //   }>;
 // }
 
-export default function VideoDetails({ params }: { params: { id: string } }) {
+export default function VideoDetails() {
   const router = useRouter();
+  const params = useParams<{ id: string;}>()
+  const videoId = params.id;
+
   const [video, setVideo] = useState<VideoData | null>(null);
   // const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
   // const [isCreatingLink, setIsCreatingLink] = useState(false);
   // const [newEmail, setNewEmail] = useState("");
   // const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loading, setLoading] = useState(true);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
     const fetchVideo = async () => {
       try {
-        const { data } = await axios.get(`/api/video/${params.id}`);
+        const { data } = await axios.get(`/api/video/${videoId}`);
         
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch video');
-        }
-
-        if (!data.data.videoURL) {
-          throw new Error('Video URL is missing');
         }
 
         setVideo(data.data);
@@ -112,7 +112,7 @@ export default function VideoDetails({ params }: { params: { id: string } }) {
     if (params.id) {
       fetchVideo();
     }
-  }, [params.id]);
+  }, [params.id, videoId]);
 
 
   // const handleCreateShareLink = (visibility: "PUBLIC" | "PRIVATE") => {

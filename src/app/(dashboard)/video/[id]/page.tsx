@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Share2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -15,8 +15,10 @@ interface Video {
   status: string;
 }
 
-export default function VideoPage({ params }: { params: { id: string } }) {
+export default function VideoPage() {
   const router = useRouter();
+  const params = useParams<{ id: string;}>()
+  const videoId = params.id;
   const [video, setVideo] = useState<Video | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -25,7 +27,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchVideo = async () => {
       try {
-        const { data } = await axios.get(`/api/video/${params.id}`);
+        const { data } = await axios.get(`/api/video/${videoId}`);
         
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch video');
@@ -48,7 +50,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
     if (params.id) {
       fetchVideo();
     }
-  }, [params.id]);
+  }, [params.id, videoId]);
 
 
   // Handle share
