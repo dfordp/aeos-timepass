@@ -1,8 +1,6 @@
-
-
 # 🎞️ Lightweight Video Storage Service
 
-A minimal, scalable video storage platform for authenticated users to upload, manage, and securely share short-form videos with custom link options and thumbnail previews.
+A modern video storage platform built with Next.js 14, allowing authenticated users to upload, manage, and securely share videos with customizable sharing options and thumbnail previews.
 
 ---
 
@@ -10,71 +8,199 @@ A minimal, scalable video storage platform for authenticated users to upload, ma
 
 ### 📤 Upload
 
-* Drag-and-drop support for **signed-in users**.
-* Accepts **single video files up to 500 MB**.
-* **Real-time progress tracking** during upload (bytes & percentage).
-* Automatically generates a **1280×720 JPG thumbnail** (first frame).
-* After upload: `PROCESSING → READY` status indicator.
+* **Drag-and-drop** support using `react-dropzone`
+* Handles video files up to 500 MB
+* **Client-side validation** for:
+  * File size limits
+  * MIME type checking
+  * Duplicate prevention
+* **Progress tracking** with real-time feedback
+* Auto-generated thumbnails using FFmpeg
+* Processing status: `PROCESSING → READY`
 
 ### ☁️ Storage
 
-* Raw video files are stored in **object storage (e.g., AWS S3, GCS, etc.)**.
-* Thumbnails are extracted server-side using **FFmpeg** and stored alongside video metadata.
+* Videos stored in **AWS S3**
+* Pre-signed URLs for secure access
+* FFmpeg-generated thumbnails stored in S3
+* Metadata in PostgreSQL via Prisma ORM
 
 ### 📊 Dashboard
 
-* Displays **user's uploaded videos**, ordered by **most recent first**.
-* Each row includes:
+* **Responsive grid layout** showing:
+  * Thumbnail previews
+  * Video titles
+  * Upload status badges
+  * Quick action buttons
+* **Sorting options**:
+  * Most recent first (default)
+  * Name (A-Z)
+  * Size
+* **Real-time status updates**
 
-  * Video title
-  * Upload status (e.g., `PROCESSING`, `READY`)
-  * Thumbnail preview
-  * Download button
-* Clicking a row navigates to the **Video Player Page**.
+### 🎬 Video Details Page
 
-### 🎬 Video Player Page
-
-* Embedded video player for the selected file.
-* Metadata display:
-
-  * Filename
-  * File size
-  * Upload timestamp
-* Table listing all **share links** created for that video.
+* **Custom video player** with:
+  * Thumbnail poster
+  * Adaptive quality
+  * Full playback controls
+* **Detailed metadata**:
+  * File name & size
+  * Duration
+  * Resolution
+  * MIME type
+  * Upload date
+  * Last modified
+* **Share management system**
 
 ### 🔗 Share Links
 
-Users can create multiple links per video with customizable options:
+* **Multiple sharing options per video**:
+  * `PUBLIC` – Universal access
+  * `PRIVATE` – Whitelist-only access
+* **Security features**:
+  * Email-based whitelisting
+  * Optional expiration dates
+  * Access tracking
+* **Management tools**:
+  * Create/Edit/Delete links
+  * Add/Remove whitelisted users
+  * View access history
 
-* **Visibility:**
+## 🛠️ Technical Implementation
 
-  * `PUBLIC` – Anyone with the link can access.
-  * `PRIVATE` – Only **whitelisted emails** can access.
-* **Expiry presets:**
+### Frontend
+* **Framework**: Next.js 15 (App Router)
+* **UI Components**: `shadcn/ui`
+* **Styling**: Tailwind CSS
+* **State Management**: React Hooks
+* **Form Handling**: React Hook Form
+* **Notifications**: Sonner
 
-  * `1 hour`, `12 hours`, `1 day`, `30 days`, or `forever`.
-* **Last viewed timestamp** (`last_viewed_at`) is recorded every time a link is accessed.
-* For `PRIVATE` links:
+### Backend
+* **API Routes**: Next.js Route Handlers
+* **Database**: PostgreSQL with Prisma ORM
+* **Storage**: AWS S3 with pre-signed URLs
+* **Authentication**: Clerk
+* **Email**: Nodemailer
 
-  * If a whitelisted e-mail belongs to a registered user, the system sends them a **real-time notification** via email.
-* Users can view all links they've created, along with:
+### Database Schema
 
-  * Status (`active` / `expired`)
-  * Visibility type
-  * `last_viewed_at` info
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
 
----
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-## 🧱 Tech Stack
+model User {
+  id               String      @id
+  email            String      @unique
+  name             String     
+  videos           Video[]
+  whitelistedLinks ShareLink[] @relation("WhitelistedUsers")
+  createdLinks     ShareLink[] @relation("Creator")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now())
+}
 
-| Layer        | Tech Choices                                                 |
-| ------------ | ------------------------------------------------------------ |
-| Frontend     | React / Next.js (drag-drop, dashboard, player)               |
-| Backend      | Node.js / Express / Fastify                                  |
-| Video Engine | FFmpeg (thumbnail extraction)                                |
-| Auth         | ClerkAuth                          |
-| Storage      | AWS S3 / Google Cloud Storage / MinIO                        |
-| DB           | PostgreSQL / MongoDB (metadata, share links)                 |
-| Email        | SendGrid / Resend / Nodemailer                               |
-| Realtime     | Socket.IO / WebSockets for progress                          |
-| Cache        | Redis (optional, for signed URL caching or link rate limits) |
+enum VideoStatus {
+  PROCESSING
+  READY
+}
+
+model Video {
+  id           String      @id @default(uuid())
+  user         User        @relation(fields: [userId], references: [id])
+  userId       String
+  name         String      @db.VarChar(255)
+  videoURL     String      @default("")
+  thumbnailURL String      @default("")
+  status       VideoStatus @default(PROCESSING)
+  fileSize     BigInt      @default(0)
+  duration     Int?        
+  mimeType     String?     @db.VarChar(100)
+  dimensions   Json? 
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @default(now())
+
+  shareLinks ShareLink[]
+}
+
+enum LinkVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model ShareLink {
+  id            String         @id @default(uuid())
+  video         Video          @relation(fields: [videoId], references: [id])
+  videoId       String
+  creator       User           @relation("Creator", fields: [creatorId], references: [id])
+  creatorId     String
+  visibility    LinkVisibility
+  expiresAt     DateTime?      @db.Timestamp()
+  lastViewedAt  DateTime?
+  userWhitelist User[]         @relation("WhitelistedUsers")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now())
+
+  accesses LinkAccess[]
+}
+
+model LinkAccess {
+  id          String    @id @default(uuid())
+  shareLink   ShareLink @relation(fields: [shareLinkId], references: [id])
+  shareLinkId String
+  viewerEmail String?
+  viewedAt    DateTime  @default(now())
+
+  @@index([shareLinkId, viewedAt])
+}
+
+```
+
+## 🚀 Getting Started
+
+1. Clone the repository
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up environment variables:
+```env
+DATABASE_URL=
+REDIS_URL=
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/check
+CLOUDFLARE_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=""
+R2_PUBLIC_URL=
+RESEND_API_KEY=""
+SERVICE_ID=
+TEMPLATE_ID=
+TEMPLATE_ID=
+```
+
+4. Run database migrations:
+```bash
+npx prisma migrate dev
+```
+
+5. Start the development server:
+```bash
+npm run dev
+```
+
+## 📝 License
+
+MIT

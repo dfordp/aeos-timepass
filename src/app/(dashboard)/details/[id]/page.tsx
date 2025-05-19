@@ -13,20 +13,20 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogHeader,
+//   DialogTitle,
+//   DialogTrigger,
+// } from "@/components/ui/dialog";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
 import axios from "axios";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -55,30 +55,34 @@ interface VideoData {
 }
 
 
-interface ShareLinkData {
-  id: string;
-  visibility: "PUBLIC" | "PRIVATE";
-  expiresAt: string | null;
-  lastViewedAt: string | null;
-  createdAt: string;
-  creator: {
-    name: string;
-    email: string;
-  };
-  whitelistedEmails: string[];
-  accesses: {
-    viewerEmail: string;
-    viewedAt: string;
-  }[];
-}
+// interface ShareLinkData {
+//   id: string;
+//   videoId: string;
+//   creatorId: string;
+//   visibility: "PUBLIC" | "PRIVATE";
+//   expiresAt: string | null;
+//   lastViewedAt: string | null;
+//   createdAt: string;
+//   updatedAt: string;
+//   userWhitelist: Array<{
+//     id: string;
+//     email: string;
+//     name: string;
+//   }>;
+//   accesses: Array<{
+//     id: string;
+//     viewerEmail: string | null;
+//     viewedAt: string;
+//   }>;
+// }
 
 export default function VideoDetails({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [video, setVideo] = useState<VideoData | null>(null);
-  const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
-  const [isCreatingLink, setIsCreatingLink] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
-  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  // const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
+  // const [isCreatingLink, setIsCreatingLink] = useState(false);
+  // const [newEmail, setNewEmail] = useState("");
+  // const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
@@ -111,24 +115,24 @@ export default function VideoDetails({ params }: { params: { id: string } }) {
   }, [params.id]);
 
 
-  const handleCreateShareLink = (visibility: "PUBLIC" | "PRIVATE") => {
-    const newLink: ShareLinkData = {
-      id: `link${Date.now()}`,
-      visibility,
-      expiresAt: null,
-      lastViewedAt: null,
-      createdAt: new Date().toISOString(),
-      creator: {
-        name: "Current User",
-        email: "current@example.com"
-      },
-      whitelistedEmails: [],
-      accesses: []
-    };
+  // const handleCreateShareLink = (visibility: "PUBLIC" | "PRIVATE") => {
+  //   const newLink: ShareLinkData = {
+  //     id: `link${Date.now()}`,
+  //     visibility,
+  //     expiresAt: null,
+  //     lastViewedAt: null,
+  //     createdAt: new Date().toISOString(),
+  //     creator: {
+  //       name: "Current User",
+  //       email: "current@example.com"
+  //     },
+  //     whitelistedEmails: [],
+  //     accesses: []
+  //   };
 
-    setShareLinks([...shareLinks, newLink]);
-    setIsCreatingLink(false);
-  };
+  //   setShareLinks([...shareLinks, newLink]);
+  //   setIsCreatingLink(false);
+  // };
 
   // const handleDeleteLink = (linkId: string) => {
   //   setShareLinks(links => links.filter(link => link.id !== linkId));
@@ -274,9 +278,9 @@ export default function VideoDetails({ params }: { params: { id: string } }) {
                 </div>
               </div>
             )}
-          </TabsContent>`
+          </TabsContent>
           
-          {/* Share Links Tab
+        {/* Share Links Tab
           <TabsContent value="sharing" className="space-y-4">
             <div className="rounded-lg border p-4">
               <div className="flex items-center justify-between mb-4">
@@ -389,7 +393,7 @@ export default function VideoDetails({ params }: { params: { id: string } }) {
                 ))}
               </div>
             </div>
-          </TabsContent>
+          </TabsContent>  */}
           
           {/* Access Log Tab 
           <TabsContent value="access" className="space-y-4">
