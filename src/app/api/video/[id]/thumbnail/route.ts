@@ -40,7 +40,7 @@ export async function POST(req: Request,  { params }: { params: { id: string } }
 
         const thumbnail = await ffmpeg(videoPath).screenshot(
             {
-                timestamps : [0],
+                timestamps : [2],
                 filename : `${videoId}-thumb.jpg`,
                 folder:     thumbnailDir,
                 size: "1280x720"

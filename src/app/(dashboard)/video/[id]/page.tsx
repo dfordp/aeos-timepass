@@ -141,18 +141,6 @@ export default function VideoPage({ params }: { params: { id: string } }) {
             </div>
           )}
         </div>
-
-        {/* Debug Info - Remove in production */}
-        <div className="mt-4">
-          <p className="text-sm text-gray-500">Debug Info:</p>
-          <pre className="text-xs bg-gray-100 p-2 mt-1 rounded">
-            {JSON.stringify({ 
-              videoURL: video.videoURL, 
-              thumbnailURL: video.thumbnailURL,
-              status: video.status 
-            }, null, 2)}
-          </pre>
-        </div>
       </div>
     </div>
   );
