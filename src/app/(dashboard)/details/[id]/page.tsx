@@ -27,65 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import axios from "axios";
+import { toast } from "sonner";
+import Image from "next/image";
 
-// Mock Data
-const MOCK_VIDEO = {
-  id: "1",
-  name: "Advanced React Patterns",
-  videoURL: "/videos/react-patterns.mp4",
-  thumbnailURL: "/thumbnails/react.jpg",
-  status: "READY",
-  createdAt: "2024-05-18T10:00:00Z",
-  user: {
-    name: "John Doe",
-    email: "john@example.com"
-  }
-};
 
-const MOCK_SHARE_LINKS = [
-  {
-    id: "link1",
-    visibility: "PUBLIC",
-    expiresAt: null,
-    lastViewedAt: "2024-05-17T15:30:00Z",
-    createdAt: "2024-05-15T10:00:00Z",
-    creator: {
-      name: "John Doe",
-      email: "john@example.com"
-    },
-    whitelistedEmails: [],
-    accesses: [
-      {
-        viewerEmail: "alice@example.com",
-        viewedAt: "2024-05-17T15:30:00Z"
-      }
-    ]
-  },
-  {
-    id: "link2",
-    visibility: "PRIVATE",
-    expiresAt: "2024-06-18T00:00:00Z",
-    lastViewedAt: "2024-05-18T09:15:00Z",
-    createdAt: "2024-05-16T14:00:00Z",
-    creator: {
-      name: "Jane Smith",
-      email: "jane@example.com"
-    },
-    whitelistedEmails: ["bob@example.com", "charlie@example.com"],
-    accesses: [
-      {
-        viewerEmail: "bob@example.com",
-        viewedAt: "2024-05-18T09:15:00Z"
-      }
-    ]
-  }
-];
-
-interface VideoDetailsProps {
-  params: {
-    id: string;
-  }
-}
 
 interface VideoData {
   id: string;
@@ -93,12 +39,21 @@ interface VideoData {
   videoURL: string;
   thumbnailURL: string;
   status: "PROCESSING" | "READY";
+  fileSize: string;
+  duration: number | null;
+  mimeType: string | null;
+  dimensions: {
+    width: number;
+    height: number;
+  } | null;
   createdAt: string;
+  updatedAt: string;
   user: {
     name: string;
     email: string;
   };
 }
+
 
 interface ShareLinkData {
   id: string;
@@ -117,19 +72,44 @@ interface ShareLinkData {
   }[];
 }
 
-export default function VideoDetails({ params }: VideoDetailsProps) {
+export default function VideoDetails({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [video, setVideo] = useState<VideoData | null>(null);
   const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // Use mock data
-    setVideo(MOCK_VIDEO);
-    setShareLinks(MOCK_SHARE_LINKS);
+    const fetchVideo = async () => {
+      try {
+        const { data } = await axios.get(`/api/video/${params.id}`);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch video');
+        }
+
+        if (!data.data.videoURL) {
+          throw new Error('Video URL is missing');
+        }
+
+        setVideo(data.data);
+      } catch (error) {
+        console.error('Error fetching video:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to load video');
+        setError('Failed to load video');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (params.id) {
+      fetchVideo();
+    }
   }, [params.id]);
+
 
   const handleCreateShareLink = (visibility: "PUBLIC" | "PRIVATE") => {
     const newLink: ShareLinkData = {
@@ -150,38 +130,38 @@ export default function VideoDetails({ params }: VideoDetailsProps) {
     setIsCreatingLink(false);
   };
 
-  const handleDeleteLink = (linkId: string) => {
-    setShareLinks(links => links.filter(link => link.id !== linkId));
-  };
+  // const handleDeleteLink = (linkId: string) => {
+  //   setShareLinks(links => links.filter(link => link.id !== linkId));
+  // };
 
-  const handleAddWhitelistedEmail = (linkId: string) => {
-    if (!newEmail || !newEmail.includes("@")) return;
+  // const handleAddWhitelistedEmail = (linkId: string) => {
+  //   if (!newEmail || !newEmail.includes("@")) return;
 
-    setShareLinks(links =>
-      links.map(link =>
-        link.id === linkId
-          ? {
-              ...link,
-              whitelistedEmails: [...link.whitelistedEmails, newEmail]
-            }
-          : link
-      )
-    );
-    setNewEmail("");
-  };
+  //   setShareLinks(links =>
+  //     links.map(link =>
+  //       link.id === linkId
+  //         ? {
+  //             ...link,
+  //             whitelistedEmails: [...link.whitelistedEmails, newEmail]
+  //           }
+  //         : link
+  //     )
+  //   );
+  //   setNewEmail("");
+  // };
 
-  const handleRemoveWhitelistedEmail = (linkId: string, email: string) => {
-    setShareLinks(links =>
-      links.map(link =>
-        link.id === linkId
-          ? {
-              ...link,
-              whitelistedEmails: link.whitelistedEmails.filter(e => e !== email)
-            }
-          : link
-      )
-    );
-  };
+  // const handleRemoveWhitelistedEmail = (linkId: string, email: string) => {
+  //   setShareLinks(links =>
+  //     links.map(link =>
+  //       link.id === linkId
+  //         ? {
+  //             ...link,
+  //             whitelistedEmails: link.whitelistedEmails.filter(e => e !== email)
+  //           }
+  //         : link
+  //     )
+  //   );
+  // };
 
   return (
     <div className="container mx-auto p-4">
@@ -217,11 +197,39 @@ export default function VideoDetails({ params }: VideoDetailsProps) {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="font-medium">Status</div>
                     <div className="col-span-2">
-                      <Badge variant={video.status === "READY" ? "success" : "warning"}>
+                      <Badge>
                         {video.status}
                       </Badge>
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="font-medium">File Size</div>
+                    <div className="col-span-2">
+                      {formatFileSize(video.fileSize)}
+                    </div>
+                  </div>
+                  {video.duration && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="font-medium">Duration</div>
+                      <div className="col-span-2">
+                        {formatDuration(video.duration)}
+                      </div>
+                    </div>
+                  )}
+                  {video.mimeType && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="font-medium">File Type</div>
+                      <div className="col-span-2">{video.mimeType}</div>
+                    </div>
+                  )}
+                  {video.dimensions && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="font-medium">Resolution</div>
+                      <div className="col-span-2">
+                        {video.dimensions.width} × {video.dimensions.height}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="font-medium">Upload Date</div>
                     <div className="col-span-2">
@@ -229,15 +237,46 @@ export default function VideoDetails({ params }: VideoDetailsProps) {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="font-medium">Uploaded By</div>
-                    <div className="col-span-2">{video.user.name || video.user.email}</div>
+                    <div className="font-medium">Last Updated</div>
+                    <div className="col-span-2">
+                      {format(new Date(video.updatedAt), "PPP")}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="font-medium">Thumbnail</div>
+                    <div className="col-span-2">
+                      <div className="relative w-48 h-27 rounded-lg overflow-hidden">
+                        <Image
+                          src={video.thumbnailURL}
+                          alt={`Thumbnail for ${video.name}`}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="font-medium">Video</div>
+                    <div className="col-span-2">
+                      <div className="relative w-full pt-[56.25%] bg-black rounded-lg overflow-hidden">
+                        <video
+                          className="absolute top-0 left-0 w-full h-full"
+                          controls
+                          playsInline
+                          preload="metadata"
+                          poster={video.thumbnailURL}
+                        >
+                          <source src={video.videoURL} type={video.mimeType || 'video/mp4'} />
+                        </video>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-          </TabsContent>
+          </TabsContent>`
           
-          {/* Share Links Tab */}
+          {/* Share Links Tab
           <TabsContent value="sharing" className="space-y-4">
             <div className="rounded-lg border p-4">
               <div className="flex items-center justify-between mb-4">
@@ -352,7 +391,7 @@ export default function VideoDetails({ params }: VideoDetailsProps) {
             </div>
           </TabsContent>
           
-          {/* Access Log Tab */}
+          {/* Access Log Tab 
           <TabsContent value="access" className="space-y-4">
             <div className="rounded-lg border p-4">
               <h2 className="text-xl font-semibold mb-4">Access History</h2>
@@ -376,9 +415,27 @@ export default function VideoDetails({ params }: VideoDetailsProps) {
                 )}
               </div>
             </div>
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </div>
     </div>
   );
+}
+
+
+function formatFileSize(bytes: string): string {
+  const size = parseInt(bytes);
+  if (size < 1024) return size + ' B';
+  const kb = size / 1024;
+  if (kb < 1024) return kb.toFixed(1) + ' KB';
+  const mb = kb / 1024;
+  if (mb < 1024) return mb.toFixed(1) + ' MB';
+  const gb = mb / 1024;
+  return gb.toFixed(1) + ' GB';
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }

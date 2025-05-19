@@ -13,6 +13,7 @@
     "@aws-sdk/s3-request-presigner": "^3.812.0",
     "@clerk/nextjs": "^6.19.4",
     "@prisma/client": "^6.8.2",
+    "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-dialog": "^1.1.13",
     "@radix-ui/react-label": "^2.1.6",
     "@radix-ui/react-progress": "^1.1.6",

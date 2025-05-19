@@ -39,6 +39,7 @@ export default function Dashboard() {
     }
   }, [user?.id]);
 
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">

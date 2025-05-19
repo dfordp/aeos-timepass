@@ -67,3 +67,79 @@ export async function GET(
     });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    if (!id) {
+      return NextResponse.json({
+        success: false,
+        error: 'ID is required'
+      }, { 
+        status: 400 
+      });
+    }
+
+    // First get the video to check if it exists
+    const video = await prismaClient.video.findUnique({
+      where: { id },
+      include: {
+        shareLinks: true // Include share links to delete them as well
+      }
+    });
+
+    if (!video) {
+      return NextResponse.json({
+        success: false,
+        error: 'Video not found'
+      }, { 
+        status: 404 
+      });
+    }
+
+    // Delete all associated share links first (if any)
+    // if (video.shareLinks.length > 0) {
+    //   await prismaClient.shareLink.deleteMany({
+    //     where: {
+    //       videoId: id
+    //     }
+    //   });
+    // }
+
+    // Delete the video record
+    await prismaClient.video.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Video deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Video deletion error:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database error',
+        code: error.code,
+        message: error.message
+      }, { 
+        status: 400 
+      });
+    }
+
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, { 
+      status: 500 
+    });
+  }
+}

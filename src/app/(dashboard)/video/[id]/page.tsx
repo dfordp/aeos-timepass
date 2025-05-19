@@ -21,21 +21,25 @@ export default function VideoPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
+  // Fetch video data
   useEffect(() => {
     const fetchVideo = async () => {
       try {
         const { data } = await axios.get(`/api/video/${params.id}`);
-        console.log('Video data:', data);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch video');
+        }
 
         if (!data.data.videoURL) {
-          toast.error('Video URL is missing');
-          return;
+          throw new Error('Video URL is missing');
         }
 
         setVideo(data.data);
       } catch (error) {
         console.error('Error fetching video:', error);
-        toast.error('Failed to load video');
+        toast.error(error instanceof Error ? error.message : 'Failed to load video');
+        setError('Failed to load video');
       } finally {
         setLoading(false);
       }
@@ -46,6 +50,14 @@ export default function VideoPage({ params }: { params: { id: string } }) {
     }
   }, [params.id]);
 
+
+  // Handle share
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success('Link copied to clipboard');
+  };
+
+  // Loading state
   if (loading) {
     return (
       <div className="container mx-auto p-4">
@@ -56,6 +68,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
     );
   }
 
+  // Error state
   if (!video) {
     return (
       <div className="container mx-auto p-4">
@@ -76,6 +89,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="container mx-auto p-4">
+      {/* Back Button */}
       <Button 
         variant="ghost" 
         className="mb-4"
@@ -86,14 +100,15 @@ export default function VideoPage({ params }: { params: { id: string } }) {
       </Button>
 
       <div className="w-full max-w-4xl mx-auto">
-        {/* Title and Controls Section */}
+        {/* Title and Controls */}
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">{video.name}</h1>
           <div className="flex gap-2">
             <Button 
               variant="secondary" 
               size="sm"
-              onClick={() => window.open(video.videoURL, '_blank')}
+                onClick={() => window.open(video.videoURL, '_blank')}
+              disabled={!video.videoURL}
             >
               <Download className="h-4 w-4 mr-2" />
               Download
@@ -101,10 +116,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
             <Button 
               variant="secondary" 
               size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                toast.success('Link copied to clipboard');
-              }}
+              onClick={handleShare}
             >
               <Share2 className="h-4 w-4 mr-2" />
               Share
@@ -112,7 +124,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* Video Player Section */}
+        {/* Video Player */}
         <div className="relative w-full pt-[56.25%] bg-black rounded-lg overflow-hidden">
           {video.videoURL ? (
             <video
@@ -135,9 +147,20 @@ export default function VideoPage({ params }: { params: { id: string } }) {
               No video URL available
             </div>
           )}
+          
+          {/* Error Overlay */}
           {error && (
-            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center text-white bg-black bg-opacity-50">
-              {error}
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center text-white bg-black bg-opacity-75">
+              <div className="text-center p-4">
+                <p className="text-lg font-semibold mb-2">{error}</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setError('')}
+                >
+                  Dismiss
+                </Button>
+              </div>
             </div>
           )}
         </div>
