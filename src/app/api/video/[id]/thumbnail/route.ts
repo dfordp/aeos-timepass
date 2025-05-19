@@ -6,89 +6,130 @@ import prismaClient from "@/lib/prismadb";
 import fs from "node:fs/promises";
 import { handleFileUpload } from "@/helpers/s3";
 
-
-const SUPPORTED_FORMATS = [
-    '.mp4',  // MPEG-4
-    '.webm', // WebM
-    '.mov',  // QuickTime
-    '.avi',  // AVI
-    '.mkv',  // Matroska
-    '.m4v',  // iTunes Video
-    '.wmv',  // Windows Media
-];
-
-
 export async function POST(req: NextRequest) {
+    const videoDir = '';
     try {
-        const videoId = req.url.split('/').pop();
+        // 1. Extract and validate video ID
+        const urlSegments = req.url.split('/');
+        const videoId = urlSegments[urlSegments.length - 2];
+        
         if (!videoId) {
-            return NextResponse.json({ status: "fail", error: "Video ID not found" }, { status: 400 });
+            return NextResponse.json({ 
+                success: false, 
+                error: "Video ID is required" 
+            }, { status: 400 });
         }
+
+        // 2. Check if video exists in database
+        const video = await prismaClient.video.findUnique({
+            where: { id: videoId }
+        });
+
+        if (!video) {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Video not found in database" 
+            }, { status: 404 });
+        }
+
+        // 3. Setup paths and verify directory exists
         const videoDir = path.join(process.cwd(), 'public', videoId);
         
+        try {
+            await fs.access(videoDir);
+        } catch {
+            return NextResponse.json({ 
+                success: false, 
+                error: "Video directory not found" 
+            }, { status: 404 });
+        }
+
+        // 4. Find video file
         const files = await fs.readdir(videoDir);
         const videoFile = files.find(file => file.toLowerCase().endsWith('.mp4'));
 
         if (!videoFile) {
             return NextResponse.json({ 
-                status: "fail", 
-                error: `No supported video file found. Supported formats: ${SUPPORTED_FORMATS.join(', ')}` 
+                success: false, 
+                error: 'No MP4 video file found in directory'
             }, { status: 404 });
         }
 
-
+        // 5. Generate thumbnail
         const videoPath = path.join(videoDir, videoFile);
-        const thumbnailDir = path.join(process.cwd(), 'public', videoId);
+        const thumbnailPath = path.join(videoDir, `${videoId}-thumb.jpg`);
 
-        const thumbnail = await ffmpeg(videoPath).screenshot(
-            {
-                timestamps : [2],
-                filename : `${videoId}-thumb.jpg`,
-                folder:     thumbnailDir,
-                size: "1280x720"
-            }
-        )
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoPath)
+                .screenshot({
+                    timestamps: [2],
+                    filename: `${videoId}-thumb.jpg`,
+                    folder: videoDir,
+                    size: "1280x720"
+                })
+                .on('error', reject)
+                .on('end', resolve);
+        });
 
-        const thumbnailPath =  path.join(thumbnailDir, `${videoId}-thumb.jpg`);
+        // 6. Verify thumbnail was created
+        try {
+            await fs.access(thumbnailPath);
+        } catch {
+            throw new Error('Thumbnail generation failed');
+        }
 
-        const videoURL = await handleFileUpload({
-            filePath : videoPath,
-            prefix: "video",
-        })
-        const thumbnailURL = await handleFileUpload({
-            filePath : thumbnailPath,
-            prefix: "thumbnail",
-        })
+        // 7. Upload files to R2
+        const [videoURL, thumbnailURL] = await Promise.all([
+            handleFileUpload({
+                filePath: videoPath,
+                prefix: "video",
+                contentType: 'video/mp4'
+            }),
+            handleFileUpload({
+                filePath: thumbnailPath,
+                prefix: "thumbnail",
+                contentType: 'image/jpeg'
+            })
+        ]);
 
-        
-        
+        // 8. Update database
         await prismaClient.video.update({
-            where : {
-                id : videoId,
-            },
-            data : {
-                videoURL : videoURL.url,
-                thumbnailURL : thumbnailURL.url,
-                status : "READY"
+            where: { id: videoId },
+            data: {
+                videoURL: videoURL.url,
+                thumbnailURL: thumbnailURL.url,
+                status: "READY"
             }
-        })
+        });
 
+        // 9. Cleanup
+        await fs.rm(videoDir, { recursive: true, force: true })
+            .catch(error => console.warn('Cleanup warning:', error));
 
-        if(!thumbnail){
-            console.error('Error generating thumbnail');
-        }
-
-           try {
-            await fs.rm(videoDir, { recursive: true, force: true });
-        } catch (cleanupError) {
-            console.warn('Failed to clean up temporary files:', cleanupError);
-        }
         revalidatePath("/");
 
-        return NextResponse.json({ status: "success" });
-    } catch (e: unknown) {
-        console.error(e);
-        const error = e instanceof Error ? e.message : 'An unknown error occurred';
-        return NextResponse.json({ status: "fail", error });
+        return NextResponse.json({ 
+            success: true, 
+            data: { videoURL: videoURL.url, thumbnailURL: thumbnailURL.url } 
+        });
+
+    } catch (error) {
+        // Log the full error for debugging
+        console.error('Thumbnail generation error:', error);
+
+        // Cleanup on error if directory exists
+        if (videoDir) {
+            try {
+                await fs.rm(videoDir, { recursive: true, force: true });
+            } catch {
+                // Ignore cleanup errors
+            }
+        }
+
+        // Return appropriate error response
+        return NextResponse.json({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'An unknown error occurred'
+        }, { status: 500 });
     }
 }

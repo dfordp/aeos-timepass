@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowLeft} from "lucide-react";
+import { ArrowLeft, Copy, Mail, Plus, Trash2, X} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Tabs,
@@ -12,23 +12,28 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogHeader,
-//   DialogTitle,
-//   DialogTrigger,
-// } from "@/components/ui/dialog";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import axios from "axios";
 import { toast } from "sonner";
 import Image from "next/image";
+import { Input } from "@/components/ui/input";
+import { DialogDescription } from "@radix-ui/react-dialog";
+import { Label } from "@radix-ui/react-label";
+import { useUser } from "@clerk/nextjs";
 
 
 
@@ -54,26 +59,29 @@ interface VideoData {
 }
 
 
-// interface ShareLinkData {
-//   id: string;
-//   videoId: string;
-//   creatorId: string;
-//   visibility: "PUBLIC" | "PRIVATE";
-//   expiresAt: string | null;
-//   lastViewedAt: string | null;
-//   createdAt: string;
-//   updatedAt: string;
-//   userWhitelist: Array<{
-//     id: string;
-//     email: string;
-//     name: string;
-//   }>;
-//   accesses: Array<{
-//     id: string;
-//     viewerEmail: string | null;
-//     viewedAt: string;
-//   }>;
-// }
+interface ShareLinkData {
+  id: string;
+  videoId: string;
+  creatorId: string;
+  visibility: "PUBLIC" | "PRIVATE";
+  expiresAt: string | null;
+  lastViewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  userWhitelist: Array<{
+    id: string;
+    email: string;
+    name: string;
+  }>;
+  accesses: Array<{
+    id: string;
+    viewerEmail: string | null;
+    viewedAt: string;
+  }>;
+}
+
+type ExpiryPreset = '1h' | '12h' | '1d' | '30d' | 'forever';
+
 
 export default function VideoDetails() {
   const router = useRouter();
@@ -81,14 +89,20 @@ export default function VideoDetails() {
   const videoId = params.id;
 
   const [video, setVideo] = useState<VideoData | null>(null);
-  // const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
-  // const [isCreatingLink, setIsCreatingLink] = useState(false);
-  // const [newEmail, setNewEmail] = useState("");
-  // const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [shareLinks, setShareLinks] = useState<ShareLinkData[] >([]);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loading, setLoading] = useState(true);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string>('');
+  const [formData, setFormData] = useState({
+    visibility: "" as "PUBLIC" | "PRIVATE",
+    expiryPreset: "" as ExpiryPreset,
+    userEmails: [] as string[],
+  });
+  const {user} = useUser()
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -109,63 +123,120 @@ export default function VideoDetails() {
       }
     };
 
+    const fetchShareLinks = async () => {
+      try {
+        const { data } = await axios.get(`/api/link?videoId=${videoId}`);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch Share Links:');
+        }
+
+        setShareLinks(data.links);
+      } catch (error) {
+        console.error('Error fetching Share Links:', error);
+        setError('Failed to load video');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (params.id) {
       fetchVideo();
+      fetchShareLinks();
     }
   }, [params.id, videoId]);
 
 
-  // const handleCreateShareLink = (visibility: "PUBLIC" | "PRIVATE") => {
-  //   const newLink: ShareLinkData = {
-  //     id: `link${Date.now()}`,
-  //     visibility,
-  //     expiresAt: null,
-  //     lastViewedAt: null,
-  //     createdAt: new Date().toISOString(),
-  //     creator: {
-  //       name: "Current User",
-  //       email: "current@example.com"
-  //     },
-  //     whitelistedEmails: [],
-  //     accesses: []
-  //   };
+  const handleCreateShareLink = async () => {
+    try {
+      // Convert preset to actual date
+      let expiresAt: Date | null = null;
+      
+      if (formData.expiryPreset !== 'forever') {
+        const now = new Date();
+        switch (formData.expiryPreset) {
+          case '1h':
+            expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+            break;
+          case '12h':
+            expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+            break;
+          case '1d':
+            expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            break;
+          case '30d':
+            expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            break;
+        }
+      }
+  
+      const response = await axios.post('/api/link', {
+        videoId: video?.id,
+        creatorId: user?.id,
+        visibility: formData.visibility,
+        expiresAt,
+        userWhitelist: formData.userEmails
+      });
+  
+      if (response.data.success) {
+        setShareLinks(prev => [...prev, response.data.data]);
+        toast.success('Share link created successfully');
+        setIsCreatingLink(false);
+        setFormData({ 
+          visibility: "" as "PUBLIC" | "PRIVATE", 
+          expiryPreset: "" as ExpiryPreset, 
+          userEmails: [] 
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to create share link');
+    }
+  };
 
-  //   setShareLinks([...shareLinks, newLink]);
-  //   setIsCreatingLink(false);
-  // };
+   const handleDeleteLink = async (linkId: string) => {
+      try {
+          const response = await axios.delete(`/api/link/${linkId}`);
+          
+          if (response.data.success) {
+              setShareLinks(links => links.filter(link => link.id !== linkId));
+              toast.success('Share link deleted successfully');
+          } else {
+              throw new Error(response.data.error);
+          }
+      } catch (error) {
+          console.error('Error deleting share link:', error);
+          toast.error('Failed to delete share link');
+      }
+  };
 
-  // const handleDeleteLink = (linkId: string) => {
-  //   setShareLinks(links => links.filter(link => link.id !== linkId));
-  // };
+  const handleAddWhitelistedEmail = (linkId: string) => {
+    if (!newEmail || !newEmail.includes("@")) return;
 
-  // const handleAddWhitelistedEmail = (linkId: string) => {
-  //   if (!newEmail || !newEmail.includes("@")) return;
+    setShareLinks(links =>
+      links.map(link =>
+        link.id === linkId
+          ? {
+              ...link,
+              whitelistedEmails: [...link.userWhitelist, newEmail]
+            }
+          : link
+      )
+    );
+    setNewEmail("");
+  };
 
-  //   setShareLinks(links =>
-  //     links.map(link =>
-  //       link.id === linkId
-  //         ? {
-  //             ...link,
-  //             whitelistedEmails: [...link.whitelistedEmails, newEmail]
-  //           }
-  //         : link
-  //     )
-  //   );
-  //   setNewEmail("");
-  // };
-
-  // const handleRemoveWhitelistedEmail = (linkId: string, email: string) => {
-  //   setShareLinks(links =>
-  //     links.map(link =>
-  //       link.id === linkId
-  //         ? {
-  //             ...link,
-  //             whitelistedEmails: link.whitelistedEmails.filter(e => e !== email)
-  //           }
-  //         : link
-  //     )
-  //   );
-  // };
+  const handleRemoveWhitelistedEmail = (linkId: string, email: string) => {
+    setShareLinks(links =>
+      links.map(link =>
+        link.id === linkId
+          ? {
+              ...link,
+              whitelistedEmails: link.userWhitelist.filter(e => e.email !== email)
+            }
+          : link
+      )
+    );
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -280,7 +351,6 @@ export default function VideoDetails() {
             )}
           </TabsContent>
           
-        {/* Share Links Tab
           <TabsContent value="sharing" className="space-y-4">
             <div className="rounded-lg border p-4">
               <div className="flex items-center justify-between mb-4">
@@ -292,25 +362,118 @@ export default function VideoDetails() {
                       Create Link
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Create Share Link</DialogTitle>
+                      <DialogDescription>
+                        Create a new share link for your video. Set visibility and expiration options.
+                      </DialogDescription>
                     </DialogHeader>
-                    <Select onValueChange={(value: "PUBLIC" | "PRIVATE") => handleCreateShareLink(value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select visibility" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PUBLIC">Public</SelectItem>
-                        <SelectItem value="PRIVATE">Private (Whitelist Only)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="visibility">Visibility</Label>
+                        <Select
+                          value={formData.visibility}
+                          onValueChange={(value: "PUBLIC" | "PRIVATE") => 
+                            setFormData(prev => ({ ...prev, visibility: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select visibility" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PUBLIC">Public</SelectItem>
+                            <SelectItem value="PRIVATE">Private (Whitelist Only)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="expiry">Link Expiry</Label>
+                        <Select
+                          value={formData.expiryPreset}
+                          onValueChange={(value: ExpiryPreset) => 
+                            setFormData(prev => ({ ...prev, expiryPreset: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select expiry time" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1h">1 hour</SelectItem>
+                            <SelectItem value="12h">12 hours</SelectItem>
+                            <SelectItem value="1d">1 day</SelectItem>
+                            <SelectItem value="30d">30 days</SelectItem>
+                            <SelectItem value="forever">Never expires</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {formData.visibility === "PRIVATE" && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="emails">Whitelisted Emails</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="email"
+                              placeholder="Enter email address"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.currentTarget.value) {
+                                  e.preventDefault();
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    userEmails: [...prev.userEmails, e.currentTarget.value]
+                                  }));
+                                  e.currentTarget.value = '';
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {formData.userEmails.map((email, index) => (
+                              <Badge key={index} variant="secondary">
+                                {email}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="ml-2 h-4 w-4 p-0"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      userEmails: prev.userEmails.filter((_, i) => i !== index)
+                                    }));
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsCreatingLink(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleCreateShareLink}
+                        disabled={!formData.visibility}
+                      >
+                        Create Link
+                      </Button>
+                    </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </div>
               
               <div className="space-y-4">
-                {shareLinks.map((link) => (
+                {!shareLinks || shareLinks.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No share links created yet.</p>
+                      <p className="text-sm">Click Create Link to share this video.</p>
+                    </div>
+                  ) : (
+                shareLinks.map((link) => (
                   <div key={link.id} className="p-4 border rounded-lg space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
@@ -319,7 +482,7 @@ export default function VideoDetails() {
                             {link.visibility}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            Created by {link.creator.name}
+                            Created by {user?.fullName}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
@@ -331,7 +494,7 @@ export default function VideoDetails() {
                           variant="outline" 
                           size="sm"
                           onClick={() => {
-                            navigator.clipboard.writeText(`${window.location.origin}/share/${link.id}`);
+                            navigator.clipboard.writeText(`${window.location.origin}/link/${link.id}`);
                           }}
                         >
                           <Copy className="h-4 w-4 mr-2" />
@@ -359,12 +522,12 @@ export default function VideoDetails() {
                         <div className="p-4 bg-muted rounded-lg">
                           <h4 className="font-medium mb-2">Whitelisted Emails</h4>
                           <div className="flex flex-wrap gap-2 mb-2">
-                            {link.whitelistedEmails.map(email => (
-                              <Badge key={email} variant="secondary" className="flex items-center gap-1">
+                            {link.userWhitelist.map(e => (
+                              <Badge key={e.email} variant="secondary" className="flex items-center gap-1">
                                 <Mail className="h-3 w-3" />
-                                {email}
+                                {e.email}
                                 <button
-                                  onClick={() => handleRemoveWhitelistedEmail(link.id, email)}
+                                  onClick={() => handleRemoveWhitelistedEmail(link.id, e.email)}
                                   className="hover:text-destructive"
                                 >
                                   <X className="h-3 w-3" />
@@ -390,13 +553,12 @@ export default function VideoDetails() {
                       </div>
                     )}
                   </div>
-                ))}
+                )))}
               </div>
             </div>
-          </TabsContent>  */}
+          </TabsContent> 
           
-          {/* Access Log Tab 
-          <TabsContent value="access" className="space-y-4">
+          {/* <TabsContent value="access" className="space-y-4">
             <div className="rounded-lg border p-4">
               <h2 className="text-xl font-semibold mb-4">Access History</h2>
               <div className="space-y-4">
@@ -419,7 +581,7 @@ export default function VideoDetails() {
                 )}
               </div>
             </div>
-          </TabsContent> */}
+          </TabsContent>  */}
         </Tabs>
       </div>
     </div>

@@ -76,3 +76,44 @@ export async function POST(request: Request) {
         return new NextResponse('Internal Server Error', { status: 500 });
     }
 }
+
+
+export async function GET(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const videoId = searchParams.get('videoId');
+
+        if (videoId) {
+            const links = await prismaClient.shareLink.findMany({
+                where: {
+                    videoId: videoId
+                }
+            });
+
+            return NextResponse.json({ success: true, links });
+        }
+
+        // Fetch all links
+        const links = await prismaClient.shareLink.findMany({
+            include: {
+                userWhitelist: true,
+                video: true
+            }
+        });
+
+        return NextResponse.json({ success: true, links });
+
+    } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            return NextResponse.json({ 
+                success: false, 
+                error: error.message 
+            }, { status: 400 });
+        }
+
+        return NextResponse.json({ 
+            success: false, 
+            error: 'Internal Server Error' 
+        }, { status: 500 });
+    }
+}

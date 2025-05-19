@@ -9,8 +9,10 @@ export async function POST(req: NextRequest) {
         const formData = await req.formData();
         const file = formData.get("file") as File;
  
-        const videoId = req.url.split('/').pop();
-         if (!videoId) {
+        const urlSegments = req.url.split('/');
+        const videoId = urlSegments[urlSegments.length - 2];   
+        
+        if (!videoId) {
             return NextResponse.json({ status: "fail", error: "Video ID not found" }, { status: 400 });
         }
 

@@ -16,6 +16,11 @@ const r2Client = new S3Client({
   }
 });
 
+if (!process.env.R2_BUCKET || !process.env.R2_PUBLIC_URL) {
+  throw new Error('R2_BUCKET and R2_PUBLIC_URL environment variables are required');
+}
+
+
 export const R2_BUCKET = process.env.R2_BUCKET;
 
 interface UploadParams {

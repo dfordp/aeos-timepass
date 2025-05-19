@@ -20,6 +20,13 @@ export async function GET(
       }, { status: 404 });
     }
 
+     if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+      return NextResponse.json({
+        success: false,
+        error: 'Share link has expired'
+      }, { status: 410 });
+    }
+
     return NextResponse.json({
       success: true,
       data: shareLink

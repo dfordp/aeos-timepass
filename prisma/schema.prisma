@@ -10,7 +10,7 @@ datasource db {
 model User {
   id               String      @id
   email            String      @unique
-  name             String     
+  name             String
   videos           Video[]
   whitelistedLinks ShareLink[] @relation("WhitelistedUsers")
   createdLinks     ShareLink[] @relation("Creator")
@@ -32,13 +32,14 @@ model Video {
   thumbnailURL String      @default("")
   status       VideoStatus @default(PROCESSING)
   fileSize     BigInt      @default(0)
-  duration     Int?        
+  duration     Int?
   mimeType     String?     @db.VarChar(100)
-  dimensions   Json? 
+  dimensions   Json?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now())
 
   shareLinks ShareLink[]
+  accesses   LinkAccess[]
 }
 
 enum LinkVisibility {
@@ -67,6 +68,8 @@ model LinkAccess {
   shareLink   ShareLink @relation(fields: [shareLinkId], references: [id])
   shareLinkId String
   viewerEmail String?
+  video       Video     @relation(fields: [videoId], references: [id])
+  videoId     String
   viewedAt    DateTime  @default(now())
 
   @@index([shareLinkId, viewedAt])
