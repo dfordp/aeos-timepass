@@ -12,28 +12,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import axios from "axios";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
-import { DialogDescription } from "@radix-ui/react-dialog";
-import { Label } from "@radix-ui/react-label";
 import { useUser } from "@clerk/nextjs";
+import { ShareLinkDialog } from "@/components/share-video-modal";
 
 
 
@@ -58,7 +42,6 @@ interface VideoData {
   };
 }
 
-
 interface ShareLinkData {
   id: string;
   videoId: string;
@@ -80,6 +63,14 @@ interface ShareLinkData {
   }>;
 }
 
+interface Access {
+  id: string;
+  shareLinkId: string;
+  viewerEmail: string | null;
+  videoId: string;
+  viewedAt: string;
+}
+
 type ExpiryPreset = '1h' | '12h' | '1d' | '30d' | 'forever';
 
 
@@ -90,6 +81,7 @@ export default function VideoDetails() {
 
   const [video, setVideo] = useState<VideoData | null>(null);
   const [shareLinks, setShareLinks] = useState<ShareLinkData[] >([]);
+  const [access, setAccess] = useState<Access[] >([]);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
@@ -140,9 +132,28 @@ export default function VideoDetails() {
       }
     };
 
+    const fetchAccess = async () => {
+      try {
+        const { data } = await axios.get(`/api/access?videoId=${videoId}`);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch video');
+        }
+
+        setAccess(data.links);
+      } catch (error) {
+        console.error('Error fetching video:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to load video');
+        setError('Failed to load video');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (params.id) {
       fetchVideo();
       fetchShareLinks();
+      fetchAccess()
     }
   }, [params.id, videoId]);
 
@@ -356,115 +367,13 @@ export default function VideoDetails() {
             <div className="rounded-lg border p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">Active Share Links</h2>
-                <Dialog open={isCreatingLink} onOpenChange={setIsCreatingLink}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Link
-                    </Button>
-                  </DialogTrigger>
-                   <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Create Share Link</DialogTitle>
-                      <DialogDescription>
-                        Create a new share link for your video. Set visibility and expiration options.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="visibility">Visibility</Label>
-                        <Select
-                          value={formData.visibility}
-                          onValueChange={(value: "PUBLIC" | "PRIVATE") => 
-                            setFormData(prev => ({ ...prev, visibility: value }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select visibility" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="PUBLIC">Public</SelectItem>
-                            <SelectItem value="PRIVATE">Private (Whitelist Only)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="expiry">Link Expiry</Label>
-                        <Select
-                          value={formData.expiryPreset}
-                          onValueChange={(value: ExpiryPreset) => 
-                            setFormData(prev => ({ ...prev, expiryPreset: value }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select expiry time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1h">1 hour</SelectItem>
-                            <SelectItem value="12h">12 hours</SelectItem>
-                            <SelectItem value="1d">1 day</SelectItem>
-                            <SelectItem value="30d">30 days</SelectItem>
-                            <SelectItem value="forever">Never expires</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {formData.visibility === "PRIVATE" && (
-                        <div className="grid gap-2">
-                          <Label htmlFor="emails">Whitelisted Emails</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="email"
-                              placeholder="Enter email address"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && e.currentTarget.value) {
-                                  e.preventDefault();
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    userEmails: [...prev.userEmails, e.currentTarget.value]
-                                  }));
-                                  e.currentTarget.value = '';
-                                }
-                              }}
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {formData.userEmails.map((email, index) => (
-                              <Badge key={index} variant="secondary">
-                                {email}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="ml-2 h-4 w-4 p-0"
-                                  onClick={() => {
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      userEmails: prev.userEmails.filter((_, i) => i !== index)
-                                    }));
-                                  }}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsCreatingLink(false)}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={handleCreateShareLink}
-                        disabled={!formData.visibility}
-                      >
-                        Create Link
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <ShareLinkDialog
+                  isOpen={isCreatingLink}
+                  onOpenChange={setIsCreatingLink}
+                  onCreateLink={handleCreateShareLink}
+                  formData={formData}
+                  setFormData={setFormData}
+                />
               </div>
               
               <div className="space-y-4">
@@ -559,30 +468,36 @@ export default function VideoDetails() {
             </div>
           </TabsContent> 
           
-          {/* <TabsContent value="access" className="space-y-4">
+          <TabsContent value="access" className="space-y-4">
             <div className="rounded-lg border p-4">
               <h2 className="text-xl font-semibold mb-4">Access History</h2>
               <div className="space-y-4">
-                {shareLinks.flatMap(link => 
-                  link.accesses.map(access => (
-                    <div key={access.viewedAt} className="flex items-center justify-between p-3 border rounded-lg">
+                {loading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Loading access history...
+                  </div>
+                ) : !access || access.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No access history found</p>
+                    <p className="text-sm">Access logs will appear here when someone views your video</p>
+                  </div>
+                ) : (
+                  access.map(record => (
+                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="space-y-1">
                         <p className="font-medium">
-                          {access.viewerEmail || "Anonymous User"}
+                          {record.viewerEmail || "Anonymous User"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Viewed on {format(new Date(access.viewedAt), "PPp")}
+                          Viewed on {format(new Date(record.viewedAt), "PPp")}
                         </p>
                       </div>
-                      <Badge variant={link.visibility === "PUBLIC" ? "default" : "secondary"}>
-                        Via {link.visibility.toLowerCase()} link
-                      </Badge>
                     </div>
                   ))
                 )}
               </div>
             </div>
-          </TabsContent>  */}
+          </TabsContent>
         </Tabs>
       </div>
     </div>

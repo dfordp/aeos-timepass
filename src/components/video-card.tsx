@@ -89,11 +89,6 @@ export function VideoCard({
           priority={false}
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
-        {!isReady && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <p className="text-white text-sm font-medium">Processing...</p>
-          </div>
-        )}
       </CardHeader>
 
       <CardContent className="p-4">
